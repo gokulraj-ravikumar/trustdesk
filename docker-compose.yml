@@ -1,0 +1,10 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: trustdesk-db
+    environment:
+      POSTGRES_DB: trustdesk
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
