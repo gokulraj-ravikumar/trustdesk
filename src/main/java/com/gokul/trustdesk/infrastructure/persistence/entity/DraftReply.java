@@ -39,6 +39,10 @@ public class DraftReply {
         return id;
     }
 
+    public void setId(String id) {
+        this.id = id;
+    }
+
     public Ticket getTicket() {
         return ticket;
     }

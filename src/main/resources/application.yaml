@@ -1,3 +1,15 @@
 spring:
   application:
     name: trustdesk
+  datasource:
+    url: jdbc:postgresql://localhost:5432/trustdesk
+    username: postgres
+    password: password
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update # This tells Hibernate to auto-create the tables
+    show-sql: true # Prints the SQL queries in the console for debugging
+    properties:
+      hibernate:
+        format_sql: true
