@@ -17,6 +17,11 @@ import com.gokul.trustdesk.infrastructure.persistence.repository.CustomerReposit
 import com.gokul.trustdesk.infrastructure.persistence.repository.KnowledgeDocumentRepository;
 import com.gokul.trustdesk.infrastructure.persistence.repository.OrderRepository;
 import com.gokul.trustdesk.infrastructure.persistence.repository.TicketRepository;
+import dev.langchain4j.data.document.Metadata;
+import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.store.embedding.EmbeddingStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.ClassPathResource;
@@ -43,17 +48,23 @@ public class DataIngestionService {
     private final TicketRepository ticketRepository;
     private final KnowledgeDocumentRepository knowledgeDocumentRepository;
     private final ObjectMapper objectMapper; // Spring provides this automatically for JSON parsing
+    private final EmbeddingModel embeddingModel;
+    private final EmbeddingStore<TextSegment> embeddingStore;
 
     public DataIngestionService(CustomerRepository customerRepository,
                                 OrderRepository orderRepository,
                                 TicketRepository ticketRepository,
                                 KnowledgeDocumentRepository knowledgeDocumentRepository,
-                                ObjectMapper objectMapper) {
+                                ObjectMapper objectMapper,
+                                EmbeddingModel embeddingModel,
+                                EmbeddingStore<TextSegment> embeddingStore) {
         this.customerRepository = customerRepository;
         this.orderRepository = orderRepository;
         this.ticketRepository = ticketRepository;
         this.knowledgeDocumentRepository = knowledgeDocumentRepository;
         this.objectMapper = objectMapper;
+        this.embeddingModel = embeddingModel;
+        this.embeddingStore = embeddingStore;
     }
 
     @Transactional
@@ -74,7 +85,7 @@ public class DataIngestionService {
         if (customerRepository.count() > 0) return; // Prevent duplicate ingestion on restart
 
         InputStream inputStream = new ClassPathResource("data/customers.json").getInputStream();
-        List<CustomerDto> dtos = objectMapper.readValue(inputStream, new TypeReference<List<CustomerDto>>() {});
+        List<CustomerDto> dtos = objectMapper.readValue(inputStream, new TypeReference<>() {});
 
         for (CustomerDto dto : dtos) {
             Customer customer = new Customer();
@@ -96,7 +107,7 @@ public class DataIngestionService {
         if (orderRepository.count() > 0) return;
 
         InputStream inputStream = new ClassPathResource("data/orders.json").getInputStream();
-        List<OrderDto> dtos = objectMapper.readValue(inputStream, new TypeReference<List<OrderDto>>() {});
+        List<OrderDto> dtos = objectMapper.readValue(inputStream, new TypeReference<>() {});
 
         for (OrderDto dto : dtos) {
             Order order = new Order();
@@ -126,7 +137,7 @@ public class DataIngestionService {
         if (ticketRepository.count() > 0) return;
 
         InputStream inputStream = new ClassPathResource("data/tickets.json").getInputStream();
-        List<TicketDto> dtos = objectMapper.readValue(inputStream, new TypeReference<List<TicketDto>>() {});
+        List<TicketDto> dtos = objectMapper.readValue(inputStream, new TypeReference<>() {});
 
         for (TicketDto dto : dtos) {
             Ticket ticket = new Ticket();
@@ -186,6 +197,15 @@ public class DataIngestionService {
             doc.setUpdatedAt(Instant.now());
 
             knowledgeDocumentRepository.save(doc);
+
+            Metadata metadata = new Metadata()
+                    .put("doc_id", doc.getId())
+                    .put("title", doc.getTitle());
+
+            TextSegment segment = TextSegment.from(content, metadata);
+            Embedding embedding = embeddingModel.embed(segment).content();
+
+            embeddingStore.add(embedding, segment);
         }
         log.info("Ingested {} knowledge base documents", resources.length);
     }
