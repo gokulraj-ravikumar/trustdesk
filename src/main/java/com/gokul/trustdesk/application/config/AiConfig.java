@@ -1,8 +1,10 @@
 package com.gokul.trustdesk.application.config;
 
 import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.googleai.GoogleAiEmbeddingModel;
+import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,6 +41,15 @@ public class AiConfig {
                 .password(password)
                 .table("embeddings")
                 .dimension(768)
+                .build();
+    }
+
+    @Bean
+    public ChatLanguageModel chatLanguageModel() {
+        return GoogleAiGeminiChatModel.builder()
+                .apiKey(geminiApiKey)
+                .modelName("gemini-2.5-flash") // if rate limit exceeded, use gemini-3.5-flash-lite
+                .temperature(0.0)
                 .build();
     }
 }

@@ -40,7 +40,7 @@ public class KnowledgeBaseService {
                     return new DocumentSearchResponse(
                             segment.metadata().getString("doc_id"),
                             segment.metadata().getString("title"),
-                            segment.text().substring(0, Math.min(segment.text().length(), 200)) + "...",
+                            segment.text(),
                             match.score()
                     );
                 })

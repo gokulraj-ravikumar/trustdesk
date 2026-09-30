@@ -8,8 +8,8 @@ spring:
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
-      ddl-auto: update # This tells Hibernate to auto-create the tables
-    show-sql: true # Prints the SQL queries in the console for debugging
+      ddl-auto: update
+    show-sql: true
     properties:
       hibernate:
         format_sql: true

@@ -48,6 +48,9 @@ public class Ticket {
     @Enumerated(EnumType.STRING)
     private TicketPriority priority;
 
+    @Column(name = "escalation_reason", columnDefinition = "TEXT")
+    private String escalationReason;
+
     // Seed-only labels (used strictly for the eval runner to check accuracy)
     @Column(name = "expected_category")
     private String expectedCategory;
@@ -185,6 +188,14 @@ public class Ticket {
 
     public void setPriority(TicketPriority priority) {
         this.priority = priority;
+    }
+
+    public String getEscalationReason() {
+        return escalationReason;
+    }
+
+    public void setEscalationReason(String escalationReason) {
+        this.escalationReason = escalationReason;
     }
 
     public String getExpectedCategory() {
