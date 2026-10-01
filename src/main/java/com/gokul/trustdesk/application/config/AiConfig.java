@@ -48,7 +48,7 @@ public class AiConfig {
     public ChatLanguageModel chatLanguageModel() {
         return GoogleAiGeminiChatModel.builder()
                 .apiKey(geminiApiKey)
-                .modelName("gemini-2.5-flash") // if rate limit exceeded, use gemini-3.5-flash-lite
+                .modelName("gemini-3.5-flash-lite") // if rate limit of gemini-2.5-flash exceeded, use gemini-3.5-flash-lite
                 .temperature(0.0)
                 .build();
     }

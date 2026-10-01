@@ -48,8 +48,8 @@ public class Ticket {
     @Enumerated(EnumType.STRING)
     private TicketPriority priority;
 
-    @Column(name = "escalation_reason", columnDefinition = "TEXT")
-    private String escalationReason;
+    @Column(name = "triage_reason", columnDefinition = "TEXT")
+    private String triageReason;
 
     // Seed-only labels (used strictly for the eval runner to check accuracy)
     @Column(name = "expected_category")
@@ -190,12 +190,12 @@ public class Ticket {
         this.priority = priority;
     }
 
-    public String getEscalationReason() {
-        return escalationReason;
+    public String getTriageReason() {
+        return triageReason;
     }
 
-    public void setEscalationReason(String escalationReason) {
-        this.escalationReason = escalationReason;
+    public void setTriageReason(String triageReason) {
+        this.triageReason = triageReason;
     }
 
     public String getExpectedCategory() {

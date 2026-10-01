@@ -17,6 +17,7 @@ import com.gokul.trustdesk.infrastructure.persistence.repository.TicketRepositor
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,17 +29,20 @@ public class TicketTriageOrchestrator {
     private final AiLanguageModelPort aiLanguageModelPort; // Interfaces with Gemini/Mock
     private final TicketRepository ticketRepository;
     private final DraftReplyRepository draftReplyRepository;
+    private final AdversarialGuardrailService guardrailService;
 
     public TicketTriageOrchestrator(TicketContextService ticketContextService,
                                     KnowledgeBaseService knowledgeBaseService,
                                     AiLanguageModelPort aiLanguageModelPort,
                                     TicketRepository ticketRepository,
-                                    DraftReplyRepository draftReplyRepository) {
+                                    DraftReplyRepository draftReplyRepository,
+                                    AdversarialGuardrailService guardrailService) {
         this.ticketContextService = ticketContextService;
         this.knowledgeBaseService = knowledgeBaseService;
         this.aiLanguageModelPort = aiLanguageModelPort;
         this.ticketRepository = ticketRepository;
         this.draftReplyRepository = draftReplyRepository;
+        this.guardrailService = guardrailService;
     }
 
     @Transactional
@@ -53,11 +57,11 @@ public class TicketTriageOrchestrator {
         Ticket ticket = ticketRepository.findById(ticketId).orElseThrow();
         ticket.setCategory(TicketCategory.valueOf(decision.category().toUpperCase()));
         ticket.setPriority(TicketPriority.valueOf(decision.priority().toUpperCase()));
+        ticket.setTriageReason(decision.reasonSummary());
 
-        // If the decision indicates escalation, update the ticket status and reason
+        // If the decision indicates escalation, update the ticket status
         if (Boolean.TRUE.equals(decision.shouldEscalate())) {
             ticket.setStatus(TicketStatus.ESCALATED);
-            ticket.setEscalationReason(decision.reasonSummary());
         } else {
             ticket.setStatus(TicketStatus.TRIAGED);
         }
@@ -70,6 +74,20 @@ public class TicketTriageOrchestrator {
     @Transactional
     public DraftDecision generateDraftReply(String ticketId) {
         TicketContextResponse context = ticketContextService.getTicketContext(ticketId);
+        Ticket ticket = ticketRepository.findById(ticketId)
+                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found: " + ticketId));
+
+        // Guardrail check: If the ticket body contains adversarial content, escalate and return a safe response
+        if (!guardrailService.isSafe(context.ticket().body())) {
+            ticket.setStatus(TicketStatus.ESCALATED);
+            ticket.setTriageReason("BLOCKED BY GUARDRAIL: Adversarial intent detected in ticket body.");
+            ticketRepository.save(ticket);
+
+            String cannedResponse = "For security reasons, your request requires manual review. It has been escalated to a human agent.";
+            saveDraftToDatabase(ticket, cannedResponse, List.of());
+
+            return new DraftDecision(cannedResponse, List.of(), List.of());
+        }
 
         // 1. Ask Postgres to find the most relevant policy documents based on the customer's message
         List<DocumentSearchResponse> retrievedDocs = knowledgeBaseService.search(context.ticket().body());
@@ -78,21 +96,22 @@ public class TicketTriageOrchestrator {
         DraftDecision decision = aiLanguageModelPort.generateDraft(context, retrievedDocs);
 
         // 3. Save the draft reply to the DB
-        Ticket ticket = ticketRepository.findById(ticketId)
-                .orElseThrow(() -> new ResourceNotFoundException("Ticket not found: " + ticketId));
+        saveDraftToDatabase(ticket, decision.draftBody(), decision.citations());
 
+        // need to add the logic here to save this draft and handle the approval gate.
+        return decision;
+    }
+
+    private void saveDraftToDatabase(Ticket ticket, String body, List<String> citations) {
         DraftReply draftEntity = new DraftReply();
 
         draftEntity.setId("drf_" + UUID.randomUUID().toString().substring(0, 8));
         draftEntity.setTicket(ticket);
-        draftEntity.setBody(decision.draftBody());
+        draftEntity.setBody(body);
         draftEntity.setStatus(DraftStatus.GENERATED);
-        draftEntity.setCreatedAt(java.time.Instant.now());
-        draftEntity.setCitations(decision.citations());
+        draftEntity.setCreatedAt(Instant.now());
+        draftEntity.setCitations(citations);
 
         draftReplyRepository.save(draftEntity);
-
-        // need to add the logic here to save this draft and handle the approval gate.
-        return decision;
     }
 }
