@@ -50,12 +50,13 @@ public interface TrustDeskAiService {
         </TASK>
         
         <TOOL_USAGE>
-        The ONLY automated tool available in your system is 'start_refund_review'.
-        You MUST output 'start_refund_review' in the recommended actions list IF AND ONLY IF EITHER of these generic conditions are met:
-        1. The customer requests a refund AND the retrieved policy confirms their situation is eligible.
-        2. The retrieved policy explicitly dictates that a "refund review" or "refund process" is the correct resolution for the customer's described problem.
+        You have exactly TWO automated tools available: 'start_refund_review' and 'create_replacement_order'.
         
-        Do NOT suggest any other tools (such as carrier investigations, replacements, or escalations) as tool actions. Leave the list empty for all other resolutions.
+        1. 'start_refund_review': Use this IF AND ONLY IF the customer requests a refund AND the policy permits it, OR the policy explicitly dictates a refund review (e.g., duplicate charges).
+        2. 'create_replacement_order': Use this IF AND ONLY IF the customer requests a replacement for a damaged/defective item AND the policy permits it.
+        
+        If multiple actions apply, output the most relevant one.
+        For all other scenarios (carrier investigations, safety issues, general questions), do NOT suggest any tool actions. Leave the list empty.
         </TOOL_USAGE>
         """)
     DraftDecision draft(@UserMessage String contextAndDocsJson);

@@ -1,25 +1,24 @@
 package com.gokul.trustdesk.domain.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gokul.trustdesk.application.rest.dto.DocumentSearchResponse;
 import com.gokul.trustdesk.application.rest.dto.TicketContextResponse;
 import com.gokul.trustdesk.application.rest.exception.ResourceNotFoundException;
 import com.gokul.trustdesk.domain.model.DraftDecision;
 import com.gokul.trustdesk.domain.model.TriageDecision;
-import com.gokul.trustdesk.domain.model.enums.DraftStatus;
-import com.gokul.trustdesk.domain.model.enums.TicketCategory;
-import com.gokul.trustdesk.domain.model.enums.TicketPriority;
-import com.gokul.trustdesk.domain.model.enums.TicketStatus;
+import com.gokul.trustdesk.domain.model.enums.*;
 import com.gokul.trustdesk.domain.port.AiLanguageModelPort;
 import com.gokul.trustdesk.infrastructure.persistence.entity.DraftReply;
 import com.gokul.trustdesk.infrastructure.persistence.entity.Ticket;
+import com.gokul.trustdesk.infrastructure.persistence.entity.ToolActionRequest;
 import com.gokul.trustdesk.infrastructure.persistence.repository.DraftReplyRepository;
 import com.gokul.trustdesk.infrastructure.persistence.repository.TicketRepository;
+import com.gokul.trustdesk.infrastructure.persistence.repository.ToolActionRequestRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 public class TicketTriageOrchestrator {
@@ -30,19 +29,25 @@ public class TicketTriageOrchestrator {
     private final TicketRepository ticketRepository;
     private final DraftReplyRepository draftReplyRepository;
     private final AdversarialGuardrailService guardrailService;
+    private final ToolActionRequestRepository toolActionRequestRepository;
+    private final ObjectMapper objectMapper;
 
     public TicketTriageOrchestrator(TicketContextService ticketContextService,
                                     KnowledgeBaseService knowledgeBaseService,
                                     AiLanguageModelPort aiLanguageModelPort,
                                     TicketRepository ticketRepository,
                                     DraftReplyRepository draftReplyRepository,
-                                    AdversarialGuardrailService guardrailService) {
+                                    AdversarialGuardrailService guardrailService,
+                                    ToolActionRequestRepository toolActionRequestRepository,
+                                    ObjectMapper objectMapper) {
         this.ticketContextService = ticketContextService;
         this.knowledgeBaseService = knowledgeBaseService;
         this.aiLanguageModelPort = aiLanguageModelPort;
         this.ticketRepository = ticketRepository;
         this.draftReplyRepository = draftReplyRepository;
         this.guardrailService = guardrailService;
+        this.toolActionRequestRepository = toolActionRequestRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional
@@ -98,7 +103,18 @@ public class TicketTriageOrchestrator {
         // 3. Save the draft reply to the DB
         saveDraftToDatabase(ticket, decision.draftBody(), decision.citations());
 
-        // need to add the logic here to save this draft and handle the approval gate.
+        // --- APPROVAL-GATED TOOL GENERATION ---
+        if (decision.recommendedActions() != null && !decision.recommendedActions().isEmpty()) {
+            for (String actionName : decision.recommendedActions()) {
+                Optional<ToolRegistry> toolOpt = ToolRegistry.fromName(actionName);
+
+                if (toolOpt.isPresent()) {
+                    createPendingToolAction(ticket, toolOpt.get());
+                    break;
+                }
+            }
+        }
+
         return decision;
     }
 
@@ -113,5 +129,43 @@ public class TicketTriageOrchestrator {
         draftEntity.setCitations(citations);
 
         draftReplyRepository.save(draftEntity);
+    }
+
+    // Helper method to create the pending tool action
+    private void createPendingToolAction(Ticket ticket, ToolRegistry toolDef) {
+        // --- IDEMPOTENCY GUARD ---
+        // Check if there is already a pending action for this exact tool on this ticket
+        boolean alreadyPending = toolActionRequestRepository.existsByTicketIdAndToolNameAndStatusIn(
+                ticket.getId(),
+                toolDef.getToolName(),
+                List.of(ActionStatus.APPROVAL_REQUIRED, ActionStatus.REQUESTED)
+        );
+
+        if (alreadyPending) {
+            return;
+        }
+
+        ToolActionRequest action = new ToolActionRequest();
+
+        String idempotencyKey = UUID.randomUUID().toString();
+
+        action.setId("act_" + idempotencyKey.substring(0, 8));
+        action.setTicket(ticket);
+
+        action.setToolName(toolDef.getToolName());
+        action.setIdempotencyKey(idempotencyKey);
+        action.setRequiresHumanApproval(toolDef.isRequiresApproval());
+        action.setRiskLevel(toolDef.getRiskLevel());
+        action.setStatus(toolDef.getInitialStatus());
+        action.setCreatedAt(Instant.now());
+
+        Map<String, Object> payloadMap = new HashMap<>();
+        payloadMap.put("customerId", ticket.getCustomer().getId());
+        if (ticket.getOrder() != null) {
+            payloadMap.put("orderId", ticket.getOrder().getId());
+        }
+        action.setPayload(payloadMap);
+
+        toolActionRequestRepository.save(action);
     }
 }
