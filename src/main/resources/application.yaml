@@ -17,3 +17,11 @@ spring:
 ai:
   gemini:
     api-key: ${GEMINI_API_KEY:dummy-test-key}
+
+app:
+  security:
+    api-token: "demo-secret-token-123"
+    admin-username: "agent"
+    admin-password: "trustdesk123"
+    # In production, these would be injected via environment variables:
+    # admin-password: ${ADMIN_PASSWORD}
