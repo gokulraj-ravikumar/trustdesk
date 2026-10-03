@@ -16,4 +16,4 @@ spring:
 
 ai:
   gemini:
-    api-key: ${GEMINI_API_KEY}
+    api-key: ${GEMINI_API_KEY:dummy-test-key}

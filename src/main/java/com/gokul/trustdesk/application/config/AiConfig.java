@@ -8,6 +8,7 @@ import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.store.embedding.EmbeddingStore;
 import dev.langchain4j.store.embedding.pgvector.PgVectorEmbeddingStore;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -18,6 +19,7 @@ public class AiConfig {
     private String geminiApiKey;
 
     @Bean
+    @ConditionalOnMissingBean(EmbeddingModel.class)
     public EmbeddingModel embeddingModel() {
         return GoogleAiEmbeddingModel.builder()
                 .apiKey(geminiApiKey)
@@ -27,6 +29,7 @@ public class AiConfig {
     }
 
     @Bean
+    @ConditionalOnMissingBean(EmbeddingStore.class)
     public EmbeddingStore<TextSegment> embeddingStore(
             @Value("${spring.datasource.username}") String user,
             @Value("${spring.datasource.password}") String password) {
@@ -45,6 +48,7 @@ public class AiConfig {
     }
 
     @Bean
+    @ConditionalOnMissingBean(ChatLanguageModel.class)
     public ChatLanguageModel chatLanguageModel() {
         return GoogleAiGeminiChatModel.builder()
                 .apiKey(geminiApiKey)

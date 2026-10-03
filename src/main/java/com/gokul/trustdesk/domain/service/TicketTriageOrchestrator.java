@@ -8,9 +8,11 @@ import com.gokul.trustdesk.domain.model.DraftDecision;
 import com.gokul.trustdesk.domain.model.TriageDecision;
 import com.gokul.trustdesk.domain.model.enums.*;
 import com.gokul.trustdesk.domain.port.AiLanguageModelPort;
+import com.gokul.trustdesk.infrastructure.persistence.entity.AgentRunTrace;
 import com.gokul.trustdesk.infrastructure.persistence.entity.DraftReply;
 import com.gokul.trustdesk.infrastructure.persistence.entity.Ticket;
 import com.gokul.trustdesk.infrastructure.persistence.entity.ToolActionRequest;
+import com.gokul.trustdesk.infrastructure.persistence.repository.AgentRunTraceRepository;
 import com.gokul.trustdesk.infrastructure.persistence.repository.DraftReplyRepository;
 import com.gokul.trustdesk.infrastructure.persistence.repository.TicketRepository;
 import com.gokul.trustdesk.infrastructure.persistence.repository.ToolActionRequestRepository;
@@ -31,6 +33,7 @@ public class TicketTriageOrchestrator {
     private final AdversarialGuardrailService guardrailService;
     private final ToolActionRequestRepository toolActionRequestRepository;
     private final ObjectMapper objectMapper;
+    private final AgentRunTraceRepository traceRepository;
 
     public TicketTriageOrchestrator(TicketContextService ticketContextService,
                                     KnowledgeBaseService knowledgeBaseService,
@@ -39,7 +42,8 @@ public class TicketTriageOrchestrator {
                                     DraftReplyRepository draftReplyRepository,
                                     AdversarialGuardrailService guardrailService,
                                     ToolActionRequestRepository toolActionRequestRepository,
-                                    ObjectMapper objectMapper) {
+                                    ObjectMapper objectMapper,
+                                    AgentRunTraceRepository traceRepository) {
         this.ticketContextService = ticketContextService;
         this.knowledgeBaseService = knowledgeBaseService;
         this.aiLanguageModelPort = aiLanguageModelPort;
@@ -48,6 +52,7 @@ public class TicketTriageOrchestrator {
         this.guardrailService = guardrailService;
         this.toolActionRequestRepository = toolActionRequestRepository;
         this.objectMapper = objectMapper;
+        this.traceRepository = traceRepository;
     }
 
     @Transactional
@@ -73,6 +78,10 @@ public class TicketTriageOrchestrator {
 
         ticketRepository.save(ticket);
 
+        RunStatus runStatus = Boolean.TRUE.equals(decision.shouldEscalate()) ? RunStatus.ESCALATED : RunStatus.SUCCESS;
+
+        saveTrace(ticket, RunType.TRIAGE, runStatus, GuardrailResult.PASSED, List.of(), List.of());
+
         return decision;
     }
 
@@ -90,6 +99,9 @@ public class TicketTriageOrchestrator {
 
             String cannedResponse = "For security reasons, your request requires manual review. It has been escalated to a human agent.";
             saveDraftToDatabase(ticket, cannedResponse, List.of());
+
+            // Log adversarial intercept as BLOCKED and ESCALATED
+            saveTrace(ticket, RunType.DRAFT_REPLY, RunStatus.ESCALATED, GuardrailResult.BLOCKED, List.of(), List.of());
 
             return new DraftDecision(cannedResponse, List.of(), List.of());
         }
@@ -114,6 +126,24 @@ public class TicketTriageOrchestrator {
                 }
             }
         }
+
+        // Agent Run Trace Logging
+        RunStatus draftRunStatus = TicketStatus.ESCALATED.equals(ticket.getStatus())
+                ? RunStatus.ESCALATED
+                : RunStatus.SUCCESS;
+
+        List<String> docIds = retrievedDocs.stream()
+                .map(DocumentSearchResponse::docId)
+                .toList();
+
+        saveTrace(
+                ticket,
+                RunType.DRAFT_REPLY,
+                draftRunStatus,
+                GuardrailResult.PASSED,
+                docIds,
+                decision.recommendedActions() != null ? decision.recommendedActions() : List.of()
+        );
 
         return decision;
     }
@@ -167,5 +197,25 @@ public class TicketTriageOrchestrator {
         action.setPayload(payloadMap);
 
         toolActionRequestRepository.save(action);
+    }
+
+    // --- HELPER METHOD TO SAVE TRACES ---
+    private void saveTrace(Ticket ticket,
+                           RunType runType,
+                           RunStatus status,
+                           GuardrailResult guardrailResult,
+                           List<String> retrievedDocIds,
+                           List<String> toolCalls) {
+        AgentRunTrace trace = new AgentRunTrace();
+        trace.setId("run_" + UUID.randomUUID().toString().substring(0, 8));
+        trace.setTicket(ticket);
+        trace.setRunType(runType);
+        trace.setStatus(status);
+        trace.setGuardrailResults(guardrailResult);
+        trace.setRetrievedDocIds(retrievedDocIds != null ? retrievedDocIds : List.of());
+        trace.setToolCalls(toolCalls != null ? toolCalls : List.of());
+        trace.setCreatedAt(Instant.now());
+
+        traceRepository.save(trace);
     }
 }
