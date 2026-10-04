@@ -99,7 +99,7 @@ Triggering `/api/v1/eval/run` executes the AI orchestration pipeline against his
 ## 🔐 Security & Trade-offs
 
 * **Current State:** The REST API utilizes a lightweight Bearer Token Filter (`ApiTokenFilter`) combined with a simulated frontend login flow using `sessionStorage` and Axios interceptors.
-* **Enterprise Context:** In a production microservice architecture, this application is designed to sit behind an API Gateway (e.g., Kong, AWS API Gateway). The Gateway handles full OAuth2/OIDC validation and forwards a secure internal service token to Spring Boot. This keeps the service decoupled from heavy RBAC boilerplate while maintaining a zero-trust boundary.
+* **Enterprise Context:** In a production microservice architecture, this application is designed to sit behind an API Gateway (e.g., Kong, AWS API Gateway). The Gateway handles full OAuth2/OIDC validation and forwards a secure internal service token to Spring Boot. This keeps the service decoupled from heavy RBAC boilerplate while maintaining a zero-trust boundary. 
 
 ## ⚠️ Known Limitations & Future Scope
 
