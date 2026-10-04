@@ -3,8 +3,44 @@ services:
     image: pgvector/pgvector:pg16
     container_name: trustdesk-db
     environment:
-      POSTGRES_DB: trustdesk
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
+      POSTGRES_DB: trustdesk
     ports:
       - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d trustdesk"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    container_name: trustdesk-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/trustdesk
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=password
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    ports:
+      - "8080:8080"
+    restart: on-failure
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: trustdesk-frontend
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+    restart: on-failure
+
+volumes:
+  pgdata:
