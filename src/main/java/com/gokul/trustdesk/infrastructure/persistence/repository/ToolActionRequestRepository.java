@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
@@ -26,4 +27,6 @@ public interface ToolActionRequestRepository extends JpaRepository<ToolActionReq
             String toolName,
             Collection<ActionStatus> statuses
     );
+
+    List<ToolActionRequest> findByTicketId(String ticketId);
 }

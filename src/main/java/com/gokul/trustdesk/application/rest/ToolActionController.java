@@ -4,10 +4,9 @@ import com.gokul.trustdesk.application.rest.dto.ToolActionResponse;
 import com.gokul.trustdesk.domain.service.ToolActionService;
 import com.gokul.trustdesk.infrastructure.persistence.entity.ToolActionRequest;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/tool-actions")
@@ -29,6 +28,16 @@ public class ToolActionController {
     public ResponseEntity<ToolActionResponse> rejectAction(@PathVariable String id) {
         ToolActionRequest action = toolActionService.processAction(id, ToolActionService.Resolution.REJECT);
         return ResponseEntity.ok(mapToDto(action));
+    }
+
+    @GetMapping("/ticket/{ticketId}")
+    public ResponseEntity<List<ToolActionResponse>> getActionsForTicket(@PathVariable String ticketId) {
+        List<ToolActionResponse> responses = toolActionService.getActionsForTicket(ticketId)
+                .stream()
+                .map(this::mapToDto)
+                .toList();
+
+        return ResponseEntity.ok(responses);
     }
 
     private ToolActionResponse mapToDto(ToolActionRequest action) {

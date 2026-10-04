@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 public class ToolActionService {
 
@@ -47,5 +49,9 @@ public class ToolActionService {
         }
 
         return toolActionRequestRepository.save(action);
+    }
+
+    public List<ToolActionRequest> getActionsForTicket(String ticketId) {
+        return toolActionRequestRepository.findByTicketId(ticketId);
     }
 }
